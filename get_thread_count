@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Prints the thread count of the passed process name
+# Usage: get_thread_count.sh [program_name]
+# (c) ADBeta    10 Feb 2025
+
+# Make sure there was user input
+if [ "$#" -ne 1 ]; then
+        echo "Usage: get_thread_count [program_name]"
+        exit 1
+fi
+
+proc_id="$(pgrep -f .*$1.* | head -n1)"
+threads="$(ps hH $proc_id | wc -l)"
+
+echo "proc \"$1\" ($proc_id) has $threads threads running"
