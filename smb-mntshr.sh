@@ -1,135 +1,184 @@
 #!/bin/sh
 ################################################################################
-# SMB Share mounting script version 5.0
-# ADBeta(c)    29 Jun 2025
+# SMB Share Mounting Script    Version 6.0
+# (c)ADBeta    Jan 2026
 ################################################################################
 
 #Define SMB Username and password
-smb_uname="server"
-smb_paswd="password"
+SMB_UNAME="server"
+SMB_PASWD="password"
 
-#Define System Username, UID and GID
+# Define System Username, UID and GID
 _user="$(id -u -n)"
 _uid="$(id -u)"
 _gid="$(id -g)"
 
-#Define Mount point locations
-mount_root=/home/$_user
+# Define Mountpoint Directories
+MNT_ROOT="/home/$_user"
 
-SHRD_DIR=$mount_root/Shared
-MDIA_DIR=$mount_root/Media
-ARCH_DIR=$mount_root/Archive
-JORD_DIR=$mount_root/Jordan
-DEVL_DIR=$mount_root/Development
-
-##--------------------##
-
-#Define samba share names and mountpoints. Both are indexed together, must match!
-smb_shares=("Shared" "Media" "Archive" "Jordan" "Development")
-mount_point=($SHRD_DIR $MDIA_DIR $ARCH_DIR $JORD_DIR $DEVL_DIR)
+MNT_MED="$MNT_ROOT/Media"
+MNT_JDN="$MNT_ROOT/Jordan"
+MNT_ARC="$MNT_ROOT/Archive"
+MNT_SHR="$MNT_ROOT/Shared"
+MNT_DEV="$MNT_ROOT/Development"
 
 ##--------------------##
 
-#Mount function to make configuration easier
+
+# Define SMB Shares and Mountpoints into arrays. These MUST be 1:1 aligned
+# All MUST be at the end
+SHARES=("Media" "Jordan" "Archive" "Shared" "Development" "All")
+MNTPNT=($MNT_MED $MNT_JDN $MNT_ARC $MNT_SHR $MNT_DEV)
+
+##--------------------##
+
+
+# Mount the given SMB Share to the given Mountpoit
+# @param $1 SMB Share Name
+# @param $2 Local Mountpoint
 Mount () {
-	#Arg1 = Samba share name eg. Shared or Media   Arg2 = Mount point
-	#If mount point doesn't exist, make it
-	if [ ! -d $2 ]; then
-		echo "Creating directory $2"
-		mkdir $2
-		chown "$_uid:$_gid" "$2"
+	local SMBSHR="$1"
+	local MNTPNT="$2"
+
+	# If the Mountpoint directory doesn't exist, make it
+	if [ ! -d "$MNTPNT" ]; then
+		echo "Creating Directory $MNTPNT"
+		mkdir -p "$MNTPNT"
+		chown "$_uid:$_gid" "$MNTPNT"
+	fi
+
+	# Exit early if already mounted
+	if mountpoint -q "$MNTPNT"; then
+		echo "$MNTPNT is already Mounted."
+		return 0
 	fi
 		
+	# Mount the NFS Share to the Directory
 	#Mount the samba share to the mount point now it is safe to do so
-	sudo mount -t cifs -o vers=3.0,mfsymlinks,soft,guest,uid=$_uid,gid=$_gid "//192.168.1.250/$1" $2
-}
-
-##--------------------##
-
-#Unmount function
-Unmount () {
-	#Arg1 = Mount point name
-	sudo umount -l $1
-}
-
-###--- User Input Handling --##
-#Default if no specific action is specified 
-if [ $# -eq 0 ]; then
-	Mount "Shared" $SHRD_DIR
-	Mount "Media" $MDIA_DIR
-	Mount "Development" $DEVL_DIR
-	exit
-fi
-
-##--------------------##
-
-#If command given is either -u or -m 
-if [ "$1" = "-u" ] || [ "$1" = "-m" ]; then 
-
-	#share_match=false #Matching name flag
-	input=$2 #Set input variable to 2nd arg
-	
-	
-	#Special case for 'all' mount or unmount
-	if [ "$input" = "all" ]; then
-		#Go through all mountpoints and shares
-		for index in "${!smb_shares[@]}"; do	
-			
-			#Set share name from index
-			share="${smb_shares[index]}"
-			#Set mount from index
-			mount="${mount_point[index]}"
-				
-			#If mount operation is requested
-			if [ "$1" = "-m" ]; then
-				Mount $share $mount
-			fi
-			
-			#if unmount is requested
-			if [ "$1" = "-u" ]; then
-				Unmount $mount
-			fi
-		
-		done
-		
-		#After completing the requested task, exit
-		exit
+	if sudo mount -t cifs -o vers=3.0,mfsymlinks,soft,guest,uid=$_uid,gid=$_gid "//192.168.1.250/$SMBSHR" "$MNTPNT"; then
+		echo "Mounted $SMBSHR to $MNTPNT Successfully."
+		return 0
+	else 
+		echo "Failed to mount $SMBSHR to $MNTPNT."
+		return 1
 	fi
-	
-	#Loop through all allowed share names to see if input is valid.
-	for index in "${!smb_shares[@]}"; do
-		
-		#Set share name from index for matching
-		share="${smb_shares[index]}"
-		
-		#If input matches a share name, set the flag and exit
-		if [ "$input" = "$share" ]; then
-			
-			#Set mount variable to the indexed variable in mount_points
-			mount="${mount_point[index]}"
-			
-			#If mount operation is requested
-			if [ "$1" = "-m" ]; then
-				Mount $input $mount
-			fi
-			
-			#if unmount is requested
-			if [ "$1" = "-u" ]; then
-				Unmount $mount
-			fi
-			
-			#After completing the requested task, exit
-			exit
+}
+
+
+# Unmount the given Mountpoint
+# @param $1 Mountpoint
+Unmount () {
+	if sudo umount -l "$1"; then
+		echo "Unmounted $1 Successfully."
+		return 0
+	fi
+}
+
+
+# Prints the INDEX of the given Share in the SHARES Array, "-1" is it is invalid
+# @param $1 String to compare
+# @return 0 if Found, 1 if Not Found. Echoes its INDEX or -1 if not found
+Get_Share_Index () {
+	local STRING="$1"
+	local INDEX=0
+
+	for SHARE in "${SHARES[@]}"; do
+		if [[ "$SHARE" == "$STRING" ]]; then
+			echo "$INDEX"
+			return 0
 		fi
-		
+		((INDEX++))
 	done
 
-	#if [ "$share_match" = "false" ]; then
-	>&2 echo "error: \"$input\" is not a valid samba share"
+	# Not found
+	echo "-1"
+	return 1
+}
 
-#If command is anything but the known ones, must be an error. report and exit
-else 
-	>&2 echo "error: \"$1\" is not a valid command"
-	exit
+
+###--- Main ---##
+# The only valid number of operands is 0, or 2, for example "-m all"
+if [[ $# -ne 0 && $# -ne 2 ]] then
+	echo -e "Usage:
+
+mntshr                - Mounts the default group of Shares
+mntshr -m all         - Mounts all known Shares
+mntshr -u all         - Unmount all known Shares
+
+mntshr -m share_name  - Mounts the given Share to the given Mountpoint
+mntshr -u share_name  - Unmounts the given Mountpoint
+
+mntshr -l shares      - lists all known Share Names"
+
+	exit 1
 fi
 
+# Get the given NFS and Mountpoint - are blank if not given at calltime
+OPERATION="$1"
+SHARENAME="$2"
+
+
+# If no specific Operation has been requested, mount the default Shares
+if [ -z "$OPERATION" ]; then
+	Mount "Shared"      $MNT_SHR
+	Mount "Media"       $MNT_MED
+	Mount "Development" $MNT_DEV
+	exit 0
+fi
+
+
+# List the Shares    TODO: Add support for other listings if needed later
+if [[ "$OPERATION" == "-l" ]]; then
+	echo "Availabe Shares: ${SHARES[@]}"
+	exit 0
+fi
+
+
+# By this point the Command given is a 2 operand -m or -u. Find the given Share INDEX
+INDEX=$(Get_Share_Index "$SHARENAME")
+
+if [[ "$INDEX" == "-1" ]]; then
+	echo "Invalid Share. Use -l shares to see the available Shares"
+	exit 1
+fi
+		
+
+# If Mount operation:
+if [[ "$OPERATION" == "-m" ]]; then
+	
+	# Special loop case for if "All" was selected
+	if [[ "${SHARES[$INDEX]}" == "All" ]]; then
+		for ((i=0; i<${#MNTPNT[@]}; i++)); do
+			Mount "${SHARES[$i]}" "${MNTPNT[$i]}"
+		done
+
+	# Normal Single Share Mount routine
+	else 	
+		Mount "${SHARES[$INDEX]}" "${MNTPNT[$INDEX]}"
+	fi
+
+	exit 0
+fi
+
+
+# If Unmount operation:
+if [[ "$OPERATION" == "-u" ]]; then
+	
+	# Special loop case for if "All" was selected
+	if [[ "${SHARES[$INDEX]}" == "All" ]]; then
+		for ((i=0; i<${#MNTPNT[@]}; i++)); do
+			Unmount "${MNTPNT[$i]}"
+		done
+
+	# Normal Single Share Mount routine
+	else 	
+		Unmount "${MNTPNT[$INDEX]}"
+	fi
+
+	exit 0
+fi
+
+
+# If nothing has triggered an exit yet, the given Operation is invalid.
+echo "Invalid Operation. Use -h to get usage info"
+exit 1

@@ -20,12 +20,14 @@ MNT_DEV="$MNT_ROOT/Development"
 
 ##--------------------##
 
+
 # Define NFS and Mountpoints into arrays. These MUST be 1:1 aligned
 # All MUST be at the end
 SHARES=("Media" "Jordan" "Archive" "Shared" "Development" "All")
 MNTPNT=($MNT_MED $MNT_JDN $MNT_ARC $MNT_SHR $MNT_DEV)
 
 ##--------------------##
+
 
 # Mount the given NFS Share to the given Mountpoit
 # @param $1 NFS Share Name
@@ -101,7 +103,7 @@ mntshr                - Mounts the default group of Shares
 mntshr -m all         - Mounts all known Shares
 mntshr -u all         - Unmount all known Shares
 
-mntshr -m share_name  - Mounts the given NFS Share to the given Mountpoint
+mntshr -m share_name  - Mounts the given Share to the given Mountpoint
 mntshr -u share_name  - Unmounts the given Mountpoint
 
 mntshr -l shares      - lists all known Share Names"
@@ -138,15 +140,6 @@ if [[ "$INDEX" == "-1" ]]; then
 	exit 1
 fi
 		
-	#	# If umount operation:
-	#	if [[ "$OPERATION" == "-u" ]]; then
-	#		Unmount "${MNTPNT[$INDEX]}"
-	#	fi
-
-	#	exit 0
-
-	#else
-
 
 # If Mount operation:
 if [[ "$OPERATION" == "-m" ]]; then
